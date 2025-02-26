@@ -1,0 +1,69 @@
+from facebook_business.api import FacebookAdsApi
+from facebook_business.adobjects.adaccount import AdAccount
+from dotenv import load_dotenv
+import os
+
+# טוען את משתני הסביבה מקובץ ה- .env
+load_dotenv()
+
+
+# קריאה לטוקן ול-ID מתוך קובץ ה- .env
+ACCESS_TOKEN = os.getenv("ACCESS_TOKEN")
+AD_ACCOUNT_ID = os.getenv("AD_ACCOUNT_ID")
+
+def analyze_ad_performance(ads, ctr_threshold=4.0, cpc_threshold=1.0, roas_threshold=1.0):
+    suggestions = []
+
+    for ad in ads:
+        try:
+            ctr = float(ad.get("ctr", 0) or 0)
+            cpc = float(ad.get("cpc", 0) or 0)
+            spend = float(ad.get("spend", 0) or 0)
+            roas = float(ad.get("purchase_roas", 0) or 0)
+            conversions = int(ad.get("conversions", 0) or 0)
+            frequency = float(ad.get("frequency", 0) or 0)
+
+            if spend == 0:
+                suggestion = "No spend yet — monitor performance."
+            elif ctr > ctr_threshold and cpc < cpc_threshold and roas > roas_threshold:
+                suggestion = "Increase budget — strong performance!"
+            elif frequency > 3 and ctr < ctr_threshold:
+                suggestion = "High frequency with low CTR — consider refreshing the creative."
+            elif ctr < 2.0 or cpc > cpc_threshold or roas < roas_threshold:
+                suggestion = "Consider pausing or optimizing copy/design."
+            else:
+                suggestion = "Keep running, monitor closely."
+
+            suggestions.append(
+                f"Ad ID: {ad['ad_id']}, CTR: {ctr:.2f}%, CPC: ${cpc:.2f}, ROAS: {roas:.2f}, Conversions: {conversions}, Frequency: {frequency:.2f}, Suggestion: {suggestion}"
+            )
+
+        except Exception as e:
+            suggestions.append(f"Error analyzing ad {ad.get('ad_id', 'Unknown')}: {e}")
+
+    return suggestions
+
+
+# Initialize API
+FacebookAdsApi.init(access_token=ACCESS_TOKEN)
+
+# Fetch ad account insights
+ad_account = AdAccount(f'act_{AD_ACCOUNT_ID}')  # ID של חשבון המודעות
+insights = ad_account.get_insights(
+    fields=[
+        "ad_id", "impressions", "clicks", "spend", "ctr", "cpc", "purchase_roas", "conversions", "frequency"
+    ],
+    params={"date_preset": "last_30d"}
+)
+if not insights:
+    print("No insights returned.")
+else:
+    print("Insights received successfully.")
+
+# Convert API response to list
+test_ads = [dict(ad) for ad in insights]
+
+# Run analysis
+results = analyze_ad_performance(test_ads)
+for result in results:
+    print(result)
